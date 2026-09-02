@@ -11,8 +11,8 @@ import {
 } from "@discordjs/voice";
 import type { Guild } from "discord.js";
 import play from "play-dl";
-import { logger } from "./logger";
-import type { GuildPlayer, Track } from "./types";
+import { logger } from "./logger.js";
+import type { GuildPlayer, Track } from "./types.js";
 
 type RuntimePlayer = GuildPlayer & {
   audioPlayer: AudioPlayer;
