@@ -1,5 +1,5 @@
 import play from "play-dl";
-import type { Track } from "./types";
+import type { Track } from "./types.js";
 
 const SPOTIFY_HOSTS = new Set(["open.spotify.com", "spotify.com"]);
 const APPLE_MUSIC_HOSTS = new Set(["music.apple.com", "geo.music.apple.com"]);
