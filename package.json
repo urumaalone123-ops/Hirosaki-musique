@@ -1,0 +1,24 @@
+{
+  "name": "hirosaki-musique",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "build": "tsc",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.0",
+    "@snazzah/davey": "^0.1.12",
+    "discord.js": "^14.25.1",
+    "opusscript": "^0.1.1",
+    "pino": "^9.14.0",
+    "play-dl": "^1.9.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
