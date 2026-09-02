@@ -7,7 +7,7 @@ import {
   type ChatInputCommandInteraction,
   type GuildMember,
 } from "discord.js";
-import { logger } from "./logger";
+import { logger } from "./logger.js";
 import {
   describeCurrent,
   describeQueue,
@@ -16,8 +16,8 @@ import {
   resumeGuild,
   skipGuild,
   stopGuild,
-} from "./player";
-import { findTrack } from "./search";
+} from "./player.js";
+import { findTrack } from "./search.js";
 
 const config = (() => {
   const token = process.env["DISCORD_BOT_TOKEN"];
