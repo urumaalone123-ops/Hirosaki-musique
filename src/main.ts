@@ -1,4 +1,4 @@
-import { startMusicBot } from "./bot";
+import { startMusicBot } from "./bot.js";
 
 void startMusicBot().catch((error) => {
   console.error(error);
