@@ -22,6 +22,22 @@ type RuntimePlayer = GuildPlayer & {
 
 const players = new Map<string, RuntimePlayer>();
 
+function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function formatTrack(track: Track): string {
   return `**${track.title}** · ${track.duration} · ${track.source}`;
 }
@@ -38,10 +54,14 @@ async function playNext(guild: Guild): Promise<void> {
   }
 
   try {
-    const stream = await play.stream(nextTrack.url, {
-      quality: 2,
-      discordPlayerCompatibility: true,
-    });
+    const stream = await withTimeout(
+      play.stream(nextTrack.url, {
+        quality: 2,
+        discordPlayerCompatibility: true,
+      }),
+      15_000,
+      "Le flux audio YouTube a dépassé le délai.",
+    );
     const resource = createAudioResource(stream.stream, {
       inputType: stream.type,
       inlineVolume: true,
@@ -79,7 +99,9 @@ function createPlayer(guild: Guild, channel: GuildPlayer["connectionChannel"]): 
 
   connection.subscribe(audioPlayer);
   audioPlayer.on(AudioPlayerStatus.Idle, () => {
-    void playNext(guild);
+    void playNext(guild).catch((error) => {
+      logger.error({ err: error, guildId: guild.id }, "Unable to continue playback");
+    });
   });
   audioPlayer.on("error", (error) => {
     logger.error({ err: error, guildId: guild.id }, "Audio player error");
