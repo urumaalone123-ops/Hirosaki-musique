@@ -64,7 +64,6 @@ async function playNext(guild: Guild): Promise<boolean> {
     const stream = await withTimeout(
       play.stream(nextTrack.url, {
         quality: 2,
-        discordPlayerCompatibility: true,
       }),
       15_000,
       "Le flux audio YouTube a dépassé le délai.",
