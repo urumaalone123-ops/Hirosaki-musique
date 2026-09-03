@@ -1,6 +1,7 @@
 import {
   Client,
   GatewayIntentBits,
+  PermissionsBitField,
   REST,
   Routes,
   SlashCommandBuilder,
@@ -105,6 +106,13 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
     return;
   }
 
+  const botMember = guild.members.me ?? (await guild.members.fetchMe());
+  const permissions = channel.permissionsFor(botMember);
+  if (!permissions?.has(PermissionsBitField.Flags.Connect) || !permissions.has(PermissionsBitField.Flags.Speak)) {
+    await interaction.reply("Je dois avoir les permissions **Voir le salon**, **Se connecter** et **Parler** dans ce salon vocal.");
+    return;
+  }
+
   await interaction.deferReply();
   const query = interaction.options.getString("recherche", true);
   try {
@@ -124,8 +132,8 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
   } catch (error) {
     logger.warn({ err: error, guildId: guild.id }, "Music search failed");
     const message =
-      error instanceof Error && error.message.includes("délai")
-        ? "La recherche ou l’ouverture du flux audio a pris trop de temps. Réessaie avec un autre titre."
+      error instanceof Error && (error.message.includes("délai") || error.message.includes("flux audio"))
+        ? "Je n’ai pas réussi à envoyer le son dans ce salon vocal. Vérifie que j’ai bien la permission **Parler**, puis réessaie."
         : "Je n’ai pas trouvé cette musique. Essaie avec le titre et l’artiste, ou un lien YouTube.";
     await interaction.editReply(message);
   }
