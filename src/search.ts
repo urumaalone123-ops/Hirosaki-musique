@@ -125,9 +125,9 @@ export async function findTrack(query: string, requestedBy: string): Promise<Tra
       "YouTube ne répond pas à temps.",
     );
     return {
-      title: info.videoDetails.title ?? "Vidéo YouTube",
+      title: info.video_details.title ?? "Vidéo YouTube",
       url: normalized,
-      duration: info.videoDetails.durationRaw ?? "inconnue",
+      duration: info.video_details.durationRaw ?? "inconnue",
       requestedBy,
       source: "recherche",
     };
