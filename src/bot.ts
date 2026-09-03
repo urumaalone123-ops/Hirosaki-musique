@@ -20,6 +20,24 @@ import {
 } from "./player.js";
 import { findTrack, searchSuggestions } from "./search.js";
 
+const PLAY_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 const config = (() => {
   const token = process.env["DISCORD_BOT_TOKEN"];
   const clientId = process.env["DISCORD_CLIENT_ID"];
@@ -90,17 +108,26 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
   await interaction.deferReply();
   const query = interaction.options.getString("recherche", true);
   try {
-    const track = await findTrack(query, interaction.user.username);
-    const result = await enqueueTrack(guild, channel, track);
+    const { track, result } = await withTimeout(
+      (async () => {
+        const track = await findTrack(query, interaction.user.username);
+        const result = await enqueueTrack(guild, channel, track);
+        return { track, result };
+      })(),
+      PLAY_TIMEOUT_MS,
+      "La recherche ou l’ouverture du flux audio a dépassé le délai.",
+    );
     const status = result.started
       ? "Je la lance maintenant."
       : `Ajoutée en position ${result.position} dans la file.`;
     await interaction.editReply(`**${track.title}** · ${track.duration}\n${status}`);
   } catch (error) {
     logger.warn({ err: error, guildId: guild.id }, "Music search failed");
-    await interaction.editReply(
-      "Je n’ai pas trouvé cette musique. Essaie avec le titre et l’artiste, ou un lien YouTube.",
-    );
+    const message =
+      error instanceof Error && error.message.includes("délai")
+        ? "La recherche ou l’ouverture du flux audio a pris trop de temps. Réessaie avec un autre titre."
+        : "Je n’ai pas trouvé cette musique. Essaie avec le titre et l’artiste, ou un lien YouTube.";
+    await interaction.editReply(message);
   }
 }
 
