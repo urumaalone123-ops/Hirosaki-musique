@@ -115,6 +115,7 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
 
   await interaction.deferReply();
   const query = interaction.options.getString("recherche", true);
+  await interaction.editReply("Je prépare la lecture…");
   try {
     const { track, result } = await withTimeout(
       (async () => {
