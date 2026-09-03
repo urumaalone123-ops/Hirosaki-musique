@@ -3,9 +3,11 @@ import {
   AudioResource,
   createAudioPlayer,
   createAudioResource,
+  entersState,
   joinVoiceChannel,
   NoSubscriberBehavior,
   StreamType,
+  VoiceConnectionStatus,
   type AudioPlayer,
   type VoiceConnection,
 } from "@discordjs/voice";
@@ -42,18 +44,23 @@ function formatTrack(track: Track): string {
   return `**${track.title}** · ${track.duration} · ${track.source}`;
 }
 
-async function playNext(guild: Guild): Promise<void> {
+async function playNext(guild: Guild): Promise<boolean> {
   const state = players.get(guild.id);
-  if (!state) return;
+  if (!state) return false;
 
   const nextTrack = state.queue.shift();
   if (!nextTrack) {
     state.currentTrack = null;
     state.activeResource = null;
-    return;
+    return false;
   }
 
   try {
+    await withTimeout(
+      entersState(state.connection, VoiceConnectionStatus.Ready, 15_000),
+      15_000,
+      "La connexion vocale n’est pas prête.",
+    );
     const stream = await withTimeout(
       play.stream(nextTrack.url, {
         quality: 2,
@@ -71,13 +78,16 @@ async function playNext(guild: Guild): Promise<void> {
     state.currentTrack = nextTrack;
     state.activeResource = resource;
     state.audioPlayer.play(resource);
+    logger.info({ guildId: guild.id, track: nextTrack.title }, "Audio playback started");
+    return true;
   } catch (error) {
-    logger.error({ err: error, guildId: guild.id }, "Unable to stream track");
+    logger.error({ err: error, guildId: guild.id, track: nextTrack.title }, "Unable to stream track");
     state.currentTrack = null;
-    await playNext(guild);
+    state.activeResource = null;
+    if (state.queue.length > 0) return playNext(guild);
+    return false;
   }
 }
-
 function createPlayer(guild: Guild, channel: GuildPlayer["connectionChannel"]): RuntimePlayer {
   const audioPlayer = createAudioPlayer({
     behaviors: { noSubscriber: NoSubscriberBehavior.Stop },
@@ -105,6 +115,8 @@ function createPlayer(guild: Guild, channel: GuildPlayer["connectionChannel"]): 
   });
   audioPlayer.on("error", (error) => {
     logger.error({ err: error, guildId: guild.id }, "Audio player error");
+    state.currentTrack = null;
+    state.activeResource = null;
     void playNext(guild);
   });
 
@@ -125,7 +137,12 @@ export async function enqueueTrack(
   const wasIdle = state.currentTrack === null && state.queue.length === 0;
   state.queue.push(track);
 
-  if (wasIdle) await playNext(guild);
+  if (wasIdle) {
+    const started = await playNext(guild);
+    if (!started) {
+      throw new Error("Impossible de démarrer le flux audio dans ce salon vocal.");
+    }
+  }
 
   return {
     started: wasIdle,
