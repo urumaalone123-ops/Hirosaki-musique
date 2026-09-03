@@ -13,6 +13,7 @@ import {
 } from "@discordjs/voice";
 import type { Guild } from "discord.js";
 import play from "play-dl";
+import youtubedl from "youtube-dl-exec";
 import { logger } from "./logger.js";
 import type { GuildPlayer, Track } from "./types.js";
 
@@ -44,6 +45,41 @@ function formatTrack(track: Track): string {
   return `**${track.title}** · ${track.duration} · ${track.source}`;
 }
 
+async function createTrackResource(url: string): Promise<AudioResource> {
+  try {
+    const source = await withTimeout(
+      play.stream(url, { quality: 2 }),
+      15_000,
+      "Le flux audio YouTube a dépassé le délai.",
+    );
+    return createAudioResource(source.stream, {
+      inputType: source.type,
+      inlineVolume: true,
+    });
+  } catch (playDlError) {
+    logger.warn({ err: playDlError, url }, "play-dl stream failed, trying yt-dlp fallback");
+    const subprocess = youtubedl.exec(
+      url,
+      {
+        noPlaylist: true,
+        quiet: true,
+        noWarnings: true,
+        format: "bestaudio[ext=webm][acodec=opus]",
+        output: "-",
+      },
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    if (!subprocess.stdout) {
+      subprocess.kill("SIGKILL");
+      throw new Error("yt-dlp n’a pas ouvert de flux audio.");
+    }
+    return createAudioResource(subprocess.stdout, {
+      inputType: StreamType.WebmOpus,
+      inlineVolume: true,
+    });
+  }
+}
+
 async function playNext(guild: Guild): Promise<boolean> {
   const state = players.get(guild.id);
   if (!state) return false;
@@ -61,17 +97,7 @@ async function playNext(guild: Guild): Promise<boolean> {
       15_000,
       "La connexion vocale n’est pas prête.",
     );
-    const stream = await withTimeout(
-      play.stream(nextTrack.url, {
-        quality: 2,
-      }),
-      15_000,
-      "Le flux audio YouTube a dépassé le délai.",
-    );
-    const resource = createAudioResource(stream.stream, {
-      inputType: stream.type,
-      inlineVolume: true,
-    });
+    const resource = await createTrackResource(nextTrack.url);
     resource.volume?.setVolume(0.65);
 
     state.currentTrack = nextTrack;
