@@ -1,8 +1,42 @@
 import play from "play-dl";
 import type { Track } from "./types.js";
 
+type SearchChoice = { name: string; value: string };
+
 const SPOTIFY_HOSTS = new Set(["open.spotify.com", "spotify.com"]);
 const APPLE_MUSIC_HOSTS = new Set(["music.apple.com", "geo.music.apple.com"]);
+const SEARCH_TIMEOUT_MS = 8_000;
+const SUGGESTION_CACHE_TTL_MS = 30_000;
+const suggestionCache = new Map<string, { expiresAt: number; choices: SearchChoice[] }>();
+
+function withTimeout<T>(promise: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function truncate(value: string, maxLength: number): string {
+  return value.length <= maxLength ? value : value.slice(0, maxLength - 1) + "…";
+}
+
+function isYouTubeUrl(value: string): boolean {
+  try {
+    const host = new URL(value).hostname.replace(/^www\./, "");
+    return host === "youtube.com" || host === "m.youtube.com" || host === "youtu.be";
+  } catch {
+    return false;
+  }
+}
 
 function getSource(value: string): Track["source"] {
   try {
@@ -53,12 +87,61 @@ async function resolveSearchTerm(query: string): Promise<{
   return { term: title ?? query, source };
 }
 
+export async function searchSuggestions(query: string): Promise<SearchChoice[]> {
+  const normalized = query.trim();
+  if (normalized.length < 2) return [];
+
+  const cacheKey = normalized.toLowerCase();
+  const cached = suggestionCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.choices;
+
+  try {
+    const results = await withTimeout(
+      play.search(normalized, { limit: 8, source: { youtube: "video" } }),
+      SEARCH_TIMEOUT_MS,
+      "La recherche YouTube a dépassé le délai.",
+    );
+    const choices = results
+      .filter((video) => Boolean(video.url && video.title))
+      .slice(0, 8)
+      .map((video) => ({
+        name: truncate(video.title + (video.durationRaw ? " · " + video.durationRaw : ""), 100),
+        value: video.url!,
+      }));
+    suggestionCache.set(cacheKey, { expiresAt: Date.now() + SUGGESTION_CACHE_TTL_MS, choices });
+    return choices;
+  } catch {
+    return [];
+  }
+}
 export async function findTrack(query: string, requestedBy: string): Promise<Track> {
-  const { term, source } = await resolveSearchTerm(query.trim());
-  const results = await play.search(term, {
-    limit: 1,
-    source: { youtube: "video" },
-  });
+  const normalized = query.trim();
+  if (!normalized) throw new Error("La recherche est vide.");
+
+  if (isYouTubeUrl(normalized)) {
+    const info = await withTimeout(
+      play.video_info(normalized),
+      SEARCH_TIMEOUT_MS,
+      "YouTube ne répond pas à temps.",
+    );
+    return {
+      title: info.videoDetails.title ?? "Vidéo YouTube",
+      url: normalized,
+      duration: info.videoDetails.durationRaw ?? "inconnue",
+      requestedBy,
+      source: "recherche",
+    };
+  }
+
+  const { term, source } = await resolveSearchTerm(normalized);
+  const results = await withTimeout(
+    play.search(term, {
+      limit: 1,
+      source: { youtube: "video" },
+    }),
+    SEARCH_TIMEOUT_MS,
+    "La recherche YouTube a dépassé le délai.",
+  );
   const video = results[0];
 
   if (!video?.url) {
