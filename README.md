@@ -8,11 +8,11 @@ Bot Discord musical avec recherche de titres, lecture vocale et file d'attente p
 - /pause, /resume, /skip, /stop
 - /queue, /nowplaying
 
-Les liens Spotify et Apple Music sont résolus vers une source de lecture compatible avec Discord. Le bot ne télécharge pas les flux protégés de ces plateformes.
+Les liens Spotify et Apple Music sont résolus vers une source de lecture compatible avec Discord. La lecture YouTube utilise play-dl avec un secours yt-dlp si le premier flux ne répond pas. Le bot ne télécharge pas les flux protégés de ces plateformes.
 
 ## Installation sur une VM Linux
 
-1. Installer Node.js 20+ et FFmpeg : sudo apt update && sudo apt install -y ffmpeg
+1. Installer Node.js 20+, Python 3.9+ et FFmpeg : sudo apt update && sudo apt install -y python3 ffmpeg
 2. Cloner le dépôt puis installer les dépendances : npm install
 3. Créer les variables : cp .env.example .env
 4. Renseigner DISCORD_BOT_TOKEN et DISCORD_CLIENT_ID dans l'environnement, jamais dans GitHub.
