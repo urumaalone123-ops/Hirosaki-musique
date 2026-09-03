@@ -4,6 +4,7 @@ import {
   REST,
   Routes,
   SlashCommandBuilder,
+  type AutocompleteInteraction,
   type ChatInputCommandInteraction,
   type GuildMember,
 } from "discord.js";
@@ -17,7 +18,7 @@ import {
   skipGuild,
   stopGuild,
 } from "./player.js";
-import { findTrack } from "./search.js";
+import { findTrack, searchSuggestions } from "./search.js";
 
 const config = (() => {
   const token = process.env["DISCORD_BOT_TOKEN"];
@@ -38,6 +39,7 @@ const commands = [
       option
         .setName("recherche")
         .setDescription("Titre, artiste ou lien YouTube, Spotify ou Apple Music")
+        .setAutocomplete(true)
         .setRequired(true),
     ),
   new SlashCommandBuilder()
@@ -102,6 +104,16 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
   }
 }
 
+async function handleAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
+  if (interaction.commandName !== "play") {
+    await interaction.respond([]);
+    return;
+  }
+
+  const query = interaction.options.getString("recherche") ?? "";
+  const choices = await searchSuggestions(query);
+  await interaction.respond(choices);
+}
 async function handleInteraction(interaction: ChatInputCommandInteraction) {
   if (!interaction.isChatInputCommand()) return;
 
@@ -167,6 +179,10 @@ export async function startMusicBot(): Promise<void> {
     logger.info({ tag: readyClient.user.tag }, "Music bot connected to Discord");
   });
   client.on("interactionCreate", (interaction) => {
+    if (interaction.isAutocomplete()) {
+      void handleAutocomplete(interaction).catch(() => interaction.respond([]));
+      return;
+    }
     if (!interaction.isChatInputCommand()) return;
     void handleInteraction(interaction).catch((error) => {
       logger.error({ err: error }, "Discord interaction failed");
